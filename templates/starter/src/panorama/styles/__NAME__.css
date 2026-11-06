@@ -1,0 +1,14 @@
+/* Panorama CSS: no display/flexbox; use flow-children, *-align, fit-children (docs/03-panorama.md). */
+.__NAME__-root {
+  horizontal-align: left;
+  vertical-align: top;
+  margin: 8px;
+  padding: 4px 10px;
+  border-radius: 4px;
+  background-color: #000000b0;
+}
+
+.__NAME__-label {
+  color: #ffd479;
+  font-size: 16px;
+}

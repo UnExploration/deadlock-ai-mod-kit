@@ -1,0 +1,17 @@
+node_modules/
+*/dist/
+*/export/
+rebase-backup/
+*.vpk
+*.zip
+
+.claude/
+Thumbs.db
+*.log
+
+# maker-only working file, never shipped
+WORKPLAN.md
+
+# data read off the user's own game by setup.ps1 / generate-docs.ps1; only the authored README ships
+generated/*
+!generated/README.md

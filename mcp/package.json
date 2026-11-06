@@ -1,0 +1,11 @@
+{
+  "name": "deadlock-ai-mod-kit-mcp",
+  "version": "0.1.0",
+  "description": "MCP server for deadlock-ai-mod-kit: make, test and share Deadlock mods with any AI.",
+  "license": "MIT",
+  "private": true,
+  "main": "server.js",
+  "bin": { "deadlock-ai-mod-kit-mcp": "server.js" },
+  "engines": { "node": ">=18" },
+  "scripts": { "start": "node server.js", "test": "node --test" }
+}

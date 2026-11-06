@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<!-- No network, no third-party code: this page can only touch its own localStorage. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Deadlock mod storage page</title>
+<style>
+  body { font: 16px/1.5 system-ui, sans-serif; max-width: 40em; margin: 2em auto; padding: 0 16px; color: #222; background: #fff; }
+  @media (prefers-color-scheme: dark) { body { color: #ddd; background: #161616; } }
+</style>
+</head>
+<body>
+<h1>Deadlock mod storage page</h1>
+<p>Deadlock mods can't write files. Mods made with deadlock-ai-mod-kit save their data (notes, marks, settings) by loading this page invisibly inside the game. The page keeps that data in this browser's own storage, on the player's PC, and sends nothing anywhere: it makes no network requests and runs no code from anywhere else.</p>
+<p>Opened in a normal browser, as now, it does nothing. Each mod's data sits under the mod's own name, so mods don't see each other's data. Clearing Steam's web browser data (Steam &gt; Settings &gt; In Game) wipes it.</p>
+<p><strong>Warning:</strong> The kit's storage page is run by the kit's author, free, with no guarantee it stays online. If it goes away, mods that use it stop saving until their maker hosts the page at an address of their own, and data players saved under the old address does not carry over.</p>
+<script>
+// Shared key/value store for Deadlock Panorama mods (pattern A in docs/04-persistence-and-io.md).
+// One page serves every mod: each request names its mod's namespace (ns), and a mod can only
+// touch keys under "<ns>/". The mod loads this page in a hidden CitadelHTMLPanel and talks to it:
+//   request:  URL fragment  #<encodeURIComponent(JSON {i, ns, o, ...})>   (never sent to the server)
+//   reply:    document.title = PREFIX + JSON {i, ok, ...}                  (arrives as the HTMLTitle event)
+// The browser files the data under the page's domain: same domain, same data; another domain sees none.
+(function () {
+  "use strict";
+
+  var PROTOCOL = 2;                                          // must match kvbridge.js
+  var PREFIX = "KV1:";
+  var NS_RE = /^[a-z0-9][a-z0-9_\-]{0,39}\.v[0-9]{1,4}$/;    // e.g. "notepad.v1"
+  var REST_RE = /^[A-Za-z0-9_.\-\/]{1,96}$/;                 // the part of a key after "<ns>/"
+
+  var MAX_VALUE_ESCAPED = 3600;  // JSON-escaped length, so a later `get` reply fits the 4096-char title cap
+  var MAX_REPLY = 4000;
+  var MAX_LIST_CHARS = 3000;
+  var lastId = null;
+
+  function reply(m) {
+    var s = PREFIX + JSON.stringify(m);
+    if (s.length > MAX_REPLY) s = PREFIX + JSON.stringify({ i: m.i, ok: false, e: "reply_too_big" });
+    document.title = s;
+  }
+
+  function validKey(ns, k) {
+    return typeof k === "string" && k.indexOf(ns + "/") === 0 && REST_RE.test(k.slice(ns.length + 1));
+  }
+
+  function checkKey(ns, k) {
+    if (!validKey(ns, k)) throw "bad_key";
+  }
+
+  function keysWithPrefix(ns, p) {
+    var out = [];
+    for (var n = 0; n < localStorage.length; n++) {
+      var k = localStorage.key(n);
+      if (k && k.indexOf(p) === 0 && validKey(ns, k)) out.push(k);   // only this mod's keys, as this page writes them
+    }
+    out.sort();
+    return out;
+  }
+
+  function handle() {
+    var raw = location.hash.slice(1);
+    if (!raw) return;
+    var q;
+    try { q = JSON.parse(decodeURIComponent(raw)); } catch (e) { return; }
+    if (!q || typeof q.i !== "string" || q.i.length > 64 || q.i === lastId) return;
+    lastId = q.i;
+    try {
+      if (typeof q.ns !== "string" || !NS_RE.test(q.ns)) throw "bad_ns";
+      var ns = q.ns;
+      switch (q.o) {
+        case "hello":
+          return reply({ i: q.i, ok: true, v: PROTOCOL, ns: ns, h: location.origin + location.pathname });
+        case "get": {
+          checkKey(ns, q.k);
+          var v = localStorage.getItem(q.k);
+          return reply(v === null ? { i: q.i, ok: true, x: 0 } : { i: q.i, ok: true, x: 1, v: v });
+        }
+        case "set":
+          checkKey(ns, q.k);
+          if (typeof q.v !== "string" || JSON.stringify(q.v).length > MAX_VALUE_ESCAPED) throw "value_too_big";
+          localStorage.setItem(q.k, q.v);
+          return reply({ i: q.i, ok: true });
+        case "del":
+          checkKey(ns, q.k);
+          localStorage.removeItem(q.k);
+          return reply({ i: q.i, ok: true });
+        case "list": {
+          var p = typeof q.p === "string" ? q.p : ns + "/";
+          if (p.indexOf(ns + "/") !== 0) throw "bad_prefix";
+          var all = keysWithPrefix(ns, p), start = Math.max(0, q.s | 0), page = [], len = 0;
+          for (var n = start; n < all.length; n++) {
+            len += all[n].length + 3;
+            if (len > MAX_LIST_CHARS && page.length) break;   // always advance by at least one key
+            page.push(all[n]);
+          }
+          var next = start + page.length < all.length ? start + page.length : -1;
+          return reply({ i: q.i, ok: true, keys: page, next: next, total: all.length });
+        }
+        default:
+          throw "bad_op";
+      }
+    } catch (e) {
+      reply({ i: q.i, ok: false, e: String(e).slice(0, 80) });
+    }
+  }
+
+  window.addEventListener("hashchange", handle);
+  handle();
+})();
+</script>
+</body>
+</html>

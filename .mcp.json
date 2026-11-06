@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "deadlock-ai-mod-kit": {
+      "command": "node",
+      "args": ["mcp/server.js"]
+    }
+  }
+}
